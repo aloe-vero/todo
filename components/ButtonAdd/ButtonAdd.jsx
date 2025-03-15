@@ -1,11 +1,16 @@
 import { Text, TouchableOpacity } from 'react-native';
-import { s } from './ButtonAdd.style';
+import { light, dark } from './ButtonAdd.style';
 
-export default function ButtonAdd({ onPress }) {
+export default function ButtonAdd({ onPress, theme }) {
   return (
     <>
-      <TouchableOpacity style={s.button} onPress={onPress}>
-        <Text style={s.text}>+ New Todo</Text>
+      <TouchableOpacity
+        style={theme === 'dark' ? dark.button : light.button}
+        onPress={onPress}
+      >
+        <Text style={theme === 'dark' ? dark.text : light.text}>
+          + New Todo
+        </Text>
       </TouchableOpacity>
     </>
   );

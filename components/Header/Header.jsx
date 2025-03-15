@@ -1,12 +1,18 @@
 import { View, Image, Text } from 'react-native';
-import logo from '../../assets/images/logo.png';
-import { s } from './Header.style';
+import logo from '../../assets/images/light/logo.png';
+import { light, dark } from './Header.style';
+import darklogo from '../../assets/images/dark/darklogo.png';
 
-export default function Header() {
+export default function Header({ theme }) {
   return (
-    <View style={s.container}>
-      <Image source={logo} style={s.img} />
-      <Text style={s.text}>Tu as probablement des trucs à faire</Text>
+    <View style={theme === 'dark' ? dark.container : light.container}>
+      <Image
+        source={theme === 'dark' ? darklogo : logo}
+        style={theme === 'dark' ? dark.img : light.img}
+      />
+      <Text style={theme === 'dark' ? dark.text : light.text}>
+        Tu as probablement des trucs à faire
+      </Text>
     </View>
   );
 }

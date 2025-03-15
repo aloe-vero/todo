@@ -1,19 +1,20 @@
 import { TouchableOpacity, Text, Image } from 'react-native';
-import { s } from './CardTodo.style';
-import check from '../../assets/images/check.png';
+import { light, dark } from './CardTodo.style';
+import check from '../../assets/images/light/check.png';
+import darkcheck from '../../assets/images/dark/darkcheck.png';
 
-export function CardTodo({ todo, onTouch, onLongTouch }) {
+export function CardTodo({ todo, onTouch, onLongTouch, theme }) {
   return (
     <>
       <TouchableOpacity
-        style={s.card}
+        style={theme === 'dark' ? dark.card : light.card}
         todoId={todo.id}
         onPress={onTouch}
         onLongPress={onLongTouch}
       >
         <Text
           style={[
-            s.text,
+            theme === 'dark' ? dark.text : light.text,
             {
               textDecorationLine: todo.isCompleted ? 'line-through' : 'none',
             },
@@ -22,8 +23,11 @@ export function CardTodo({ todo, onTouch, onLongTouch }) {
           {todo.title}
         </Text>
         <Image
-          style={[s.img, { opacity: !todo.isCompleted ? 0 : 1 }]}
-          source={check}
+          style={[
+            theme === 'dark' ? dark.img : light.img,
+            { opacity: !todo.isCompleted ? 0 : 1 },
+          ]}
+          source={theme === 'dark' ? darkcheck : check}
           isCompleted={todo.isCompleted}
         ></Image>
       </TouchableOpacity>

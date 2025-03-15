@@ -1,55 +1,61 @@
-import { View, ScrollView, Alert } from 'react-native';
+import { View, ScrollView, Alert, Appearance } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { s } from '../App.style';
+import { light, dark } from '../App.style';
 import Header from '../components/Header/Header';
 import { CardTodo } from '../components/CardTodo/CardTodo';
 import { useState, useEffect, useRef } from 'react';
 import TabBottomMenu from '../components/TabBottomMenu/TabBottomMenu';
 import ButtonAdd from '../components/ButtonAdd/ButtonAdd';
 import Dialog from 'react-native-dialog';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import uuid from 'react-native-uuid';
+import { useSQLiteContext } from 'expo-sqlite';
+import { Todo } from '@/types/todo.types';
 
-interface Todo {
-  id: number;
-  title: string;
-  isCompleted: boolean;
-}
+//https://docs.expo.dev/versions/latest/sdk/sqlite/ <- Database
+//https://www.npmjs.com/package/uuid  <- unique id
+//configuration IOS -> npx pod-install
 
 export default function Index() {
+  const [colorScheme, setColorScheme] = useState(Appearance.getColorScheme());
+
+  useEffect(() => {
+    const theme = Appearance.addChangeListener(({ colorScheme }) => {
+      setColorScheme(colorScheme);
+    });
+
+    return () => theme.remove();
+  }, []);
+
+  const db = useSQLiteContext();
   const [todoList, setTodoList] = useState<Todo[]>([]);
   const [activeFilter, setActiveFilter] = useState('All');
   const [isAddDialogueVisible, setIsAddDialogueVisible] = useState(false);
   const [value, setValue] = useState('');
-
   const isFirstRender = useRef(true);
   const isLoadUpdate = useRef(false);
-
   const incompletedList = todoList.filter(todo => !todo.isCompleted);
   const completedList = todoList.filter(todo => todo.isCompleted);
-
-  const all = todoList.length;
-  const incompleted = incompletedList.length;
-  const completed = completedList.length;
+  const [isDeleteDialogVisible, setIsDeleteDialogVisible] = useState(false);
+  const [todoToDelete, setTodoToDelete] = useState('');
 
   const getFilters = () => [
-    { name: 'All', length: all, isPressed: activeFilter === 'All' },
+    { name: 'All', length: todoList.length, isPressed: activeFilter === 'All' },
     {
-      name: 'Incomplete',
-      length: incompleted,
-      isPressed: activeFilter === 'Incomplete',
+      name: 'In Progress',
+      length: incompletedList.length,
+      isPressed: activeFilter === 'In Progress',
     },
     {
-      name: 'Complete',
-      length: completed,
-      isPressed: activeFilter === 'Complete',
+      name: 'Done',
+      length: completedList.length,
+      isPressed: activeFilter === 'Done',
     },
   ];
-
   const getCurrentFilteredList = () => {
     switch (activeFilter) {
-      case 'Incomplete':
+      case 'In Progress':
         return incompletedList;
-      case 'Complete':
+      case 'Done':
         return completedList;
       default:
         return todoList;
@@ -63,13 +69,14 @@ export default function Index() {
         <CardTodo
           todo={todo}
           onTouch={() => updateTodo(todo.id)}
-          onLongTouch={() => deleteTodo(todo.id)}
+          onLongTouch={() => showDeleteDialog(todo.id)}
+          theme={colorScheme}
         />
       </View>
     ));
   }
 
-  function updateTodo(id: number) {
+  function updateTodo(id: string) {
     setTodoList(prevList =>
       prevList.map(todo =>
         todo.id === id ? { ...todo, isCompleted: !todo.isCompleted } : todo
@@ -84,11 +91,8 @@ export default function Index() {
   function addTodo() {
     if (value.trim() === '') return;
 
-    const highestId =
-      todoList.length > 0 ? Math.max(...todoList.map(todo => todo.id)) : 0;
-
     const newTodo: Todo = {
-      id: highestId + 1,
+      id: uuid.v4(),
       title: value,
       isCompleted: false,
     };
@@ -97,29 +101,10 @@ export default function Index() {
     setValue('');
   }
 
-  function deleteTodo(id: number) {
-    Alert.alert(
-      'Supprimer le todo',
-      'Êtes-vous sûr de vouloir supprimer ce todo ?',
-      [
-        {
-          text: 'Annuler',
-          style: 'cancel',
-        },
-        {
-          text: 'Supprimer',
-          onPress: () => {
-            setTodoList(prevList => prevList.filter(todo => todo.id !== id));
-          },
-          style: 'destructive',
-        },
-      ]
-    );
+  function deleteTodo() {
+    db.runAsync('DELETE FROM todo WHERE id = ?;', todoToDelete);
+    setTodoList(prevList => prevList.filter(todo => todo.id !== todoToDelete));
   }
-
-  useEffect(() => {
-    loadTodoList();
-  }, []);
 
   useEffect(() => {
     if (isLoadUpdate.current) {
@@ -136,49 +121,92 @@ export default function Index() {
   function showAddDialog() {
     setIsAddDialogueVisible(true);
   }
+  function showDeleteDialog(id: string) {
+    setTodoToDelete(id);
+    setIsDeleteDialogVisible(true);
+  }
 
   async function saveTodoList() {
     console.log('save');
     try {
-      await AsyncStorage.setItem('@todolist', JSON.stringify(todoList));
+      const placeholders = todoList.map(() => '(?, ?, ?)').join(', ');
+      const values = todoList.flatMap(todo => [
+        todo.id,
+        todo.title,
+        todo.isCompleted ? 1 : 0,
+      ]);
+
+      if (todoList.length === 0) {
+        await db.runAsync(`DELETE FROM todo;`);
+      } else {
+        await db.runAsync(
+          `INSERT OR REPLACE INTO todo (id, title, isCompleted) VALUES ${placeholders}`,
+          values
+        );
+      }
     } catch (err) {
-      Alert.alert('Erreur', `Erreur de sauvegarde: ${err}`);
+      Alert.alert('Erreur' + err);
     }
   }
 
-  async function loadTodoList() {
-    console.log('Load');
-    try {
-      const stringifiedTodoList = await AsyncStorage.getItem('@todolist');
-      if (stringifiedTodoList !== null) {
-        const parsedTodoList = JSON.parse(stringifiedTodoList);
-        setTodoList(parsedTodoList);
-        isLoadUpdate.current = true;
-      }
-    } catch (err) {
-      Alert.alert('Erreur', `Erreur de chargement: ${err}`);
+  useEffect(() => {
+    async function loadTodo() {
+      if (!db) return;
+      const todos = await db.getAllAsync<Todo>('SELECT * FROM todo;');
+
+      setTodoList(todos);
     }
-  }
+
+    loadTodo();
+  }, [db]);
 
   return (
     <>
       <SafeAreaProvider>
-        <SafeAreaView style={s.app}>
-          <View style={s.header}>
-            <Header />
+        <SafeAreaView style={colorScheme === 'dark' ? dark.app : light.app}>
+          <View style={light.header}>
+            <Header theme={colorScheme} />
           </View>
 
-          <ScrollView style={s.body}>{renderTodoList()}</ScrollView>
-          <ButtonAdd onPress={showAddDialog} />
+          <ScrollView style={colorScheme === 'dark' ? dark.body : light.body}>
+            {renderTodoList()}
+          </ScrollView>
+          <ButtonAdd onPress={showAddDialog} theme={colorScheme} />
         </SafeAreaView>
       </SafeAreaProvider>
-      <View style={s.footer}>
-        <TabBottomMenu todos={getFilters()} onTouch={updateButton} />
+      <View style={colorScheme === 'dark' ? dark.footer : light.footer}>
+        <TabBottomMenu
+          filters={getFilters()}
+          onTouch={updateButton}
+          theme={colorScheme}
+        />
       </View>
 
       <Dialog.Container
+        visible={isDeleteDialogVisible}
+        onBackdropPress={() => setIsDeleteDialogVisible(false)}
+        contentStyle={colorScheme === 'dark' ? dark.dialog : light.dialog}
+      >
+        <Dialog.Title>Supprimer le todo</Dialog.Title>
+        <Dialog.Description>
+          Êtes-vous sûr de vouloir supprimer ce todo ?
+        </Dialog.Description>
+        <Dialog.Button
+          label="Annuler"
+          onPress={() => setIsDeleteDialogVisible(false)}
+        />
+        <Dialog.Button
+          label="Supprimer"
+          onPress={() => {
+            deleteTodo();
+            setIsDeleteDialogVisible(false);
+          }}
+        />
+      </Dialog.Container>
+      <Dialog.Container
         visible={isAddDialogueVisible}
         onBackdropPress={() => setIsAddDialogueVisible(false)}
+        contentStyle={colorScheme === 'dark' ? dark.dialog : light.dialog}
       >
         <Dialog.Title>Créer une tâche</Dialog.Title>
         <Dialog.Description>

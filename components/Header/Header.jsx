@@ -5,7 +5,15 @@ import darklogo from '../../assets/images/dark/darklogo.png';
 
 export default function Header({ theme }) {
   return (
-    <View style={theme === 'dark' ? dark.container : light.container}>
+    <View
+      style={theme === 'dark' ? dark.container : light.container}
+      singleTap={() => {
+        console.log('single tap');
+      }}
+      doubleTap={() => {
+        console.log('double tap');
+      }}
+    >
       <Image
         source={theme === 'dark' ? darklogo : logo}
         style={theme === 'dark' ? dark.img : light.img}

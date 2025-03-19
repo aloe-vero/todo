@@ -1,4 +1,11 @@
-import { View, ScrollView, Alert, Appearance } from 'react-native';
+import {
+  View,
+  ScrollView,
+  Alert,
+  Appearance,
+  Text,
+  TouchableOpacity,
+} from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { light, dark } from '../App.style';
 import Header from '../components/Header/Header';
@@ -10,13 +17,34 @@ import Dialog from 'react-native-dialog';
 import uuid from 'react-native-uuid';
 import { useSQLiteContext } from 'expo-sqlite';
 import { Todo } from '@/types/todo.types';
+import { Searchbar } from 'react-native-paper';
+import { List } from 'react-native-paper';
+import { useDoubleTap } from 'use-double-tap';
 
 //https://docs.expo.dev/versions/latest/sdk/sqlite/ <- Database
 //https://www.npmjs.com/package/uuid  <- unique id
 //configuration IOS -> npx pod-install
+//npm install react-native-paper
 
 export default function Index() {
   const [colorScheme, setColorScheme] = useState(Appearance.getColorScheme());
+  const [todoList, setTodoList] = useState<Todo[]>([]);
+  const [activeFilter, setActiveFilter] = useState('All');
+  const [isAddDialogueVisible, setIsAddDialogueVisible] = useState(false);
+  const [value, setValue] = useState('');
+  const [isOptionDialog, setisOptionDialog] = useState(false);
+  const [isModifyDialogVisible, setIsModifyDialogVisible] = useState(false);
+  const [isDeleteDialog, setIsDeleteDialog] = useState(false);
+  const [chosenTodo, setChosenTodo] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [count, setCount] = useState(0);
+  const db = useSQLiteContext();
+  const isFirstRender = useRef(true);
+  const isLoadUpdate = useRef(false);
+  const incompletedList = todoList.filter(todo => !todo.isCompleted);
+  const completedList = todoList.filter(todo => todo.isCompleted);
+
+  const onPress = () => setCount(prevCount => prevCount + 1);
 
   useEffect(() => {
     const theme = Appearance.addChangeListener(({ colorScheme }) => {
@@ -25,18 +53,6 @@ export default function Index() {
 
     return () => theme.remove();
   }, []);
-
-  const db = useSQLiteContext();
-  const [todoList, setTodoList] = useState<Todo[]>([]);
-  const [activeFilter, setActiveFilter] = useState('All');
-  const [isAddDialogueVisible, setIsAddDialogueVisible] = useState(false);
-  const [value, setValue] = useState('');
-  const isFirstRender = useRef(true);
-  const isLoadUpdate = useRef(false);
-  const incompletedList = todoList.filter(todo => !todo.isCompleted);
-  const completedList = todoList.filter(todo => todo.isCompleted);
-  const [isDeleteDialogVisible, setIsDeleteDialogVisible] = useState(false);
-  const [todoToDelete, setTodoToDelete] = useState('');
 
   const getFilters = () => [
     { name: 'All', length: todoList.length, isPressed: activeFilter === 'All' },
@@ -51,29 +67,47 @@ export default function Index() {
       isPressed: activeFilter === 'Done',
     },
   ];
+  const bind = useDoubleTap(event => {
+    // Your action here
+    console.log('Double tapped');
+  });
+
   const getCurrentFilteredList = () => {
+    let filteredList = todoList;
+
     switch (activeFilter) {
       case 'In Progress':
-        return incompletedList;
+        filteredList = incompletedList;
       case 'Done':
-        return completedList;
+        filteredList = completedList;
       default:
-        return todoList;
+        filteredList = todoList;
+
+        return filteredList.filter(todo =>
+          todo.title.toLowerCase().includes(searchQuery.toLowerCase())
+        );
     }
   };
 
   function renderTodoList() {
     const filteredList = getCurrentFilteredList();
-    return filteredList.map(todo => (
-      <View key={todo.id}>
-        <CardTodo
-          todo={todo}
-          onTouch={() => updateTodo(todo.id)}
-          onLongTouch={() => showDeleteDialog(todo.id)}
-          theme={colorScheme}
-        />
-      </View>
-    ));
+
+    return filteredList.length > 0 ? (
+      filteredList.map(todo => (
+        <View key={todo.id}>
+          <CardTodo
+            todo={todo}
+            onTouch={() => updateTodo(todo.id)}
+            onLongTouch={() => showOptionDialog(todo.id)}
+            theme={colorScheme}
+          />
+        </View>
+      ))
+    ) : (
+      <Text style={{ textAlign: 'center', marginTop: 10 }}>
+        Aucune tâche trouvée.
+      </Text>
+    );
   }
 
   function updateTodo(id: string) {
@@ -102,10 +136,40 @@ export default function Index() {
   }
 
   function deleteTodo() {
-    db.runAsync('DELETE FROM todo WHERE id = ?;', todoToDelete);
-    setTodoList(prevList => prevList.filter(todo => todo.id !== todoToDelete));
+    db.runAsync('DELETE FROM todo WHERE id = ?;', chosenTodo);
+    setTodoList(prevList => prevList.filter(todo => todo.id !== chosenTodo));
   }
 
+  async function modifyTodo() {
+    await db.runAsync(
+      'UPDATE todo SET title = ? WHERE id = ?',
+      value,
+      chosenTodo
+    );
+
+    setTodoList(prevList =>
+      prevList.map(todo =>
+        todo.id === chosenTodo ? { ...todo, title: value } : todo
+      )
+    );
+  }
+
+  function deleteAllCompleted() {
+    db.runAsync('DELETE FROM todo WHERE isCompleted = ?;', 1);
+    setTodoList(prevList =>
+      prevList.filter(todo => todo.isCompleted === false)
+    );
+  }
+  useEffect(() => {
+    if (count === 2) {
+      setIsDeleteDialog(true);
+      console.log(count);
+    } else if (count === 1) {
+      sortByCompletion();
+    }
+    restartCount();
+  }, [count]);
+  console.log(count);
   useEffect(() => {
     if (isLoadUpdate.current) {
       isLoadUpdate.current = false;
@@ -118,12 +182,33 @@ export default function Index() {
     }
   }, [todoList]);
 
+  function restartCount() {
+    const timeoutId = setTimeout(() => {
+      setCount(0);
+    }, 2000);
+    return () => clearTimeout(timeoutId);
+  }
+
+  function sortByCompletion() {
+    setTodoList(prevList =>
+      [...prevList].sort(
+        (a, b) => Number(b.isCompleted) - Number(a.isCompleted)
+      )
+    );
+  }
+
+  function sortByAlpha() {
+    setTodoList(prevList =>
+      [...prevList].sort((a, b) => a.title.localeCompare(b.title))
+    );
+  }
+
   function showAddDialog() {
     setIsAddDialogueVisible(true);
   }
-  function showDeleteDialog(id: string) {
-    setTodoToDelete(id);
-    setIsDeleteDialogVisible(true);
+  function showOptionDialog(id: string) {
+    setChosenTodo(id);
+    setisOptionDialog(true);
   }
 
   async function saveTodoList() {
@@ -164,9 +249,25 @@ export default function Index() {
     <>
       <SafeAreaProvider>
         <SafeAreaView style={colorScheme === 'dark' ? dark.app : light.app}>
-          <View style={light.header}>
+          <TouchableOpacity style={light.header} onPress={onPress}>
             <Header theme={colorScheme} />
-          </View>
+          </TouchableOpacity>
+
+          <List.Accordion title="Search">
+            <Searchbar
+              placeholder="Search"
+              onChangeText={setSearchQuery}
+              value={searchQuery}
+              style={{
+                width: '80%',
+                alignSelf: 'center',
+                margin: 20,
+              }}
+            />
+            <TouchableOpacity style={light.button} onPress={sortByAlpha}>
+              <Text style={light.text}>Sort</Text>
+            </TouchableOpacity>
+          </List.Accordion>
 
           <ScrollView style={colorScheme === 'dark' ? dark.body : light.body}>
             {renderTodoList()}
@@ -181,28 +282,79 @@ export default function Index() {
           theme={colorScheme}
         />
       </View>
-
+      {/**Modify and Delete Dialog */}
       <Dialog.Container
-        visible={isDeleteDialogVisible}
-        onBackdropPress={() => setIsDeleteDialogVisible(false)}
+        visible={isOptionDialog}
+        onBackdropPress={() => setisOptionDialog(false)}
         contentStyle={colorScheme === 'dark' ? dark.dialog : light.dialog}
+        verticalButtons="true"
       >
-        <Dialog.Title>Supprimer le todo</Dialog.Title>
-        <Dialog.Description>
-          Êtes-vous sûr de vouloir supprimer ce todo ?
-        </Dialog.Description>
+        <Dialog.Title>Que souhaitez vous faire?</Dialog.Title>
+
         <Dialog.Button
-          label="Annuler"
-          onPress={() => setIsDeleteDialogVisible(false)}
+          label="Modifier"
+          onPress={() => {
+            setisOptionDialog(false);
+            setTimeout(() => {
+              setIsModifyDialogVisible(true);
+            }, 1000);
+          }}
         />
+
         <Dialog.Button
           label="Supprimer"
           onPress={() => {
             deleteTodo();
-            setIsDeleteDialogVisible(false);
+            setisOptionDialog(false);
+          }}
+          style={{ color: 'red' }}
+        />
+        <Dialog.Button
+          label="Annuler"
+          onPress={() => setisOptionDialog(false)}
+        />
+      </Dialog.Container>
+      {/**Delete all completed todos Dialog */}
+      <Dialog.Container
+        visible={isDeleteDialog}
+        onBackdropPress={() => setIsDeleteDialog(false)}
+        contentStyle={colorScheme === 'dark' ? dark.dialog : light.dialog}
+        verticalButtons="true"
+      >
+        <Dialog.Title>Êtes vous sûre de tous suprrimer?</Dialog.Title>
+        <Dialog.Button
+          label="Supprimer"
+          onPress={() => {
+            deleteAllCompleted();
+            setIsDeleteDialog(false);
+          }}
+        />
+        <Dialog.Button
+          label="Annuler"
+          onPress={() => {
+            setIsDeleteDialog(false);
+          }}
+          style={{ color: 'red' }}
+        />
+      </Dialog.Container>
+      {/**Modify Dialog */}
+      <Dialog.Container
+        visible={isModifyDialogVisible}
+        onBackdropPress={() => setIsModifyDialogVisible(false)}
+        contentStyle={colorScheme === 'dark' ? dark.dialog : light.dialog}
+      >
+        <Dialog.Title>Modifier une tâche</Dialog.Title>
+
+        <Dialog.Input onChangeText={text => setValue(text)} value={value} />
+        <Dialog.Button
+          label="Modifier"
+          onPress={() => {
+            modifyTodo();
+            setIsModifyDialogVisible(false);
           }}
         />
       </Dialog.Container>
+      {/**Add Dialog */}
       <Dialog.Container
         visible={isAddDialogueVisible}
         onBackdropPress={() => setIsAddDialogueVisible(false)}

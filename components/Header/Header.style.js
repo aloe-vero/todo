@@ -6,9 +6,9 @@ export const light = StyleSheet.create({
     paddingLeft: 10,
     paddingTop: 10,
     backgroundColor: lightTheme.colors.headerBg,
-    height: 100,
+    height: 200,
   },
-  img: { width: 170, flex: 1 },
+  img: { width: 160, flex: 1 },
   text: { flex: 1, color: 'grey' },
 });
 
@@ -20,6 +20,6 @@ export const dark = StyleSheet.create({
     backgroundColor: darkTheme.colors.headerBg,
     height: 100,
   },
-  img: { width: 170, flex: 1 },
+  img: { width: 160, flex: 1 },
   text: { flex: 1, color: 'grey' },
 });

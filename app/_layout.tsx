@@ -4,7 +4,17 @@ import { SQLiteProvider, type SQLiteDatabase } from 'expo-sqlite';
 export default function RootLayout() {
   return (
     <SQLiteProvider databaseName="todo.db" onInit={createDBifNeeded}>
-      <Stack />
+      <Stack
+          screenOptions={{
+            headerStyle: {
+              backgroundColor: '#161A1D',
+            },
+            headerTintColor: '#fff',
+            headerTitleStyle: {
+              fontWeight: 'bold',
+            },
+          }}
+      />
     </SQLiteProvider>
   );
 }

@@ -13,13 +13,16 @@ import { CardTodo } from '../components/CardTodo/CardTodo';
 import { useState, useEffect, useRef } from 'react';
 import TabBottomMenu from '../components/TabBottomMenu/TabBottomMenu';
 import ButtonAdd from '../components/ButtonAdd/ButtonAdd';
-import Dialog from 'react-native-dialog';
 import uuid from 'react-native-uuid';
 import { useSQLiteContext } from 'expo-sqlite';
 import { Todo } from '@/types/todo.types';
 import { Searchbar } from 'react-native-paper';
 import { List } from 'react-native-paper';
 import { useDoubleTap } from 'use-double-tap';
+import {AddDialog} from "@/components/Dialogs/AddDialog/AddDialog"
+import {ChoiceDialog} from "@/components/Dialogs/ChoiceDialog/ChoiceDialog";
+import {DeleteDialog} from "@/components/Dialogs/DeleteDialog/DeleteDialog";
+import {ModifyDialog} from "@/components/Dialogs/ModifyDialog/ModifyDialog";
 
 //https://docs.expo.dev/versions/latest/sdk/sqlite/ <- Database
 //https://www.npmjs.com/package/uuid  <- unique id
@@ -154,12 +157,12 @@ export default function Index() {
     );
   }
 
-  function deleteAllCompleted() {
-    db.runAsync('DELETE FROM todo WHERE isCompleted = ?;', 1);
-    setTodoList(prevList =>
-      prevList.filter(todo => todo.isCompleted === false)
-    );
+  async function deleteAllCompleted() {
+    setTodoList(prevList => prevList.filter(todo => !todo.isCompleted));
+
+    await db.runAsync("DELETE FROM todo WHERE isCompleted = ?;", 1);
   }
+
   useEffect(() => {
     if (count === 2) {
       setIsDeleteDialog(true);
@@ -245,6 +248,7 @@ export default function Index() {
     loadTodo();
   }, [db]);
 
+
   return (
     <>
       <SafeAreaProvider>
@@ -283,96 +287,40 @@ export default function Index() {
         />
       </View>
       {/**Modify and Delete Dialog */}
-      <Dialog.Container
-        visible={isOptionDialog}
-        onBackdropPress={() => setisOptionDialog(false)}
-        contentStyle={colorScheme === 'dark' ? dark.dialog : light.dialog}
-        verticalButtons="true"
-      >
-        <Dialog.Title>Que souhaitez vous faire?</Dialog.Title>
+      <ChoiceDialog
+          isVisible={isOptionDialog}
+          onClose={() => setisOptionDialog(false)}
+          setIsModifyDialogVisible={setIsModifyDialogVisible}
+          deleteTodo={deleteTodo}
 
-        <Dialog.Button
-          label="Modifier"
-          onPress={() => {
-            setisOptionDialog(false);
-            setTimeout(() => {
-              setIsModifyDialogVisible(true);
-            }, 1000);
-          }}
-        />
-
-        <Dialog.Button
-          label="Supprimer"
-          onPress={() => {
-            deleteTodo();
-            setisOptionDialog(false);
-          }}
-          style={{ color: 'red' }}
-        />
-        <Dialog.Button
-          label="Annuler"
-          onPress={() => setisOptionDialog(false)}
-        />
-      </Dialog.Container>
+      />
       {/**Delete all completed todos Dialog */}
-      <Dialog.Container
-        visible={isDeleteDialog}
-        onBackdropPress={() => setIsDeleteDialog(false)}
-        contentStyle={colorScheme === 'dark' ? dark.dialog : light.dialog}
-        verticalButtons="true"
-      >
-        <Dialog.Title>Êtes vous sûre de tous suprrimer?</Dialog.Title>
-        <Dialog.Button
-          label="Supprimer"
-          onPress={() => {
-            deleteAllCompleted();
-            setIsDeleteDialog(false);
-          }}
-        />
-        <Dialog.Button
-          label="Annuler"
-          onPress={() => {
-            setIsDeleteDialog(false);
-          }}
-          style={{ color: 'red' }}
-        />
-      </Dialog.Container>
-      {/**Modify Dialog */}
-      <Dialog.Container
-        visible={isModifyDialogVisible}
-        onBackdropPress={() => setIsModifyDialogVisible(false)}
-        contentStyle={colorScheme === 'dark' ? dark.dialog : light.dialog}
-      >
-        <Dialog.Title>Modifier une tâche</Dialog.Title>
+      <DeleteDialog
+          isVisible={isDeleteDialog}
+          onClose={() => setIsDeleteDialog(false)}
+          deleteAllCompleted={deleteAllCompleted}
 
-        <Dialog.Input onChangeText={text => setValue(text)} value={value} />
-        <Dialog.Button
-          label="Modifier"
-          onPress={() => {
-            modifyTodo();
-            setIsModifyDialogVisible(false);
-          }}
-        />
-      </Dialog.Container>
+      />
+      {/**Modify Dialog */}
+      <ModifyDialog
+          isVisible={isModifyDialogVisible}
+          onClose={() => setIsModifyDialogVisible(false)}
+          value={value}
+          setValue={setValue}
+          modifyTodo={modifyTodo}
+
+      />
       {/**Add Dialog */}
-      <Dialog.Container
-        visible={isAddDialogueVisible}
-        onBackdropPress={() => setIsAddDialogueVisible(false)}
-        contentStyle={colorScheme === 'dark' ? dark.dialog : light.dialog}
-      >
-        <Dialog.Title>Créer une tâche</Dialog.Title>
-        <Dialog.Description>
-          Choisis un nom pour la nouvelle tâche
-        </Dialog.Description>
-        <Dialog.Input onChangeText={text => setValue(text)} value={value} />
-        <Dialog.Button
-          label="Créer"
-          onPress={() => {
-            addTodo();
-            setIsAddDialogueVisible(false);
-          }}
-        />
-      </Dialog.Container>
+      <AddDialog
+          isVisible={isAddDialogueVisible}
+          onClose={() => setIsAddDialogueVisible(false)}
+          value={value}
+          setValue={setValue}
+          addTodo={addTodo}
+
+      />
+
+
     </>
   );
 }

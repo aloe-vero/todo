@@ -2,8 +2,8 @@ import { StyleSheet } from 'react-native';
 import { lightTheme, darkTheme } from '../../theme';
 export const light = StyleSheet.create({
   card: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'column',
+
     width: '95%',
     height: 115,
     shadowColor: '#000',
@@ -26,8 +26,7 @@ export const light = StyleSheet.create({
 
 export const dark = StyleSheet.create({
   card: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'column',
     width: '95%',
     height: 115,
     shadowColor: '#000',

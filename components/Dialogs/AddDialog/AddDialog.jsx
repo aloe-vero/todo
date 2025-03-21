@@ -5,6 +5,8 @@ export function AddDialog({
                                     value,
                                     setValue,
                                     addTodo,
+                                    date,
+    setDate,
 
                                   }) {
   return (
@@ -18,11 +20,12 @@ export function AddDialog({
           Choisis un nom pour la nouvelle tâche
         </Dialog.Description>
         <Dialog.Input onChangeText={setValue} value={value} />
+          <Dialog.Input onChangeText={setDate} value={date} />
         <Dialog.Button
             label="Créer"
             onPress={() => {
               addTodo();
-              onClose(); // Close the dialog after adding
+              onClose();
             }}
         />
       </Dialog.Container>
